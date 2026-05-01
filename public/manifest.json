@@ -1,0 +1,6 @@
+{
+  "short_name": "Kalendarz",
+  "name": "Kalendarz - Escalas de Igreja",
+  "start_url": "/",
+  "display": "standalone"
+}
