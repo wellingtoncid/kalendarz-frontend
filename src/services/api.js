@@ -7,13 +7,28 @@ const api = axios.create({
   },
 });
 
+// Interceptor para adicionar token em todas as requisições
 api.interceptors.request.use((config) => {
-  const user = localStorage.getItem('user');
-  if (user) {
-    const parsedUser = JSON.parse(user);
-    config.headers['X-User-Id'] = parsedUser.id;
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
   }
   return config;
 });
+
+// Interceptor para tratar respostas de erro
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token inválido ou expirado - limpar localStorage
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      // Redirecionar para login
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

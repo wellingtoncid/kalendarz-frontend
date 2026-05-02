@@ -1,9 +1,6 @@
 {
   "short_name": "Kalendarz",
   "name": "Kalendarz - Escalas de Igreja",
-  "description": "Sistema de escalas para igrejas",
   "start_url": "/",
-  "display": "standalone",
-  "theme_color": "#2563EB",
-  "background_color": "#F8FAFC"
+  "display": "standalone"
 }

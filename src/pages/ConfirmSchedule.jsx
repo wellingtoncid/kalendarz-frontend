@@ -1,142 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import Modal from '../components/Modal';
-import Loader from '../components/Loader';
 import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
 
-function ConfirmSchedule() {
+function PublishedSchedules() {
   const { theme } = useTheme();
+  const [scheduleGroups, setScheduleGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedAssignment, setSelectedAssignment] = useState(null);
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    fetchAssignments();
-  }, [filter]);
+    fetchGroups();
+  }, []);
 
-  const fetchAssignments = async () => {
-    setLoading(true);
+  useEffect(() => {
+    if (selectedGroup) fetchAssignments();
+  }, [selectedGroup, filter]);
+
+  const fetchGroups = async () => {
     try {
-      const status = filter === 'all' ? '' : filter;
-      const res = await api.get(`/assignments?status=${status}`);
-      setAssignments(res.data || []);
+      const res = await api.get('/schedule-groups');
+      const confirmed = (res.data || []).filter(g => g.status === 'confirmed');
+      setScheduleGroups(confirmed);
+      if (confirmed.length > 0) setSelectedGroup(confirmed[0].id);
     } catch (err) {
-      console.error('Error fetching assignments:', err);
+      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusChange = async (id, status) => {
+  const fetchAssignments = async () => {
     try {
-      await api.put(`/assignments/${id}`, { status });
-      fetchAssignments();
-      setSelectedAssignment(null);
+      const status = filter === 'all' ? '' : filter;
+      const res = await api.get(`/assignments?schedule_group_id=${selectedGroup}&status=${status}`);
+      setAssignments(res.data || []);
     } catch (err) {
-      console.error('Error updating assignment:', err);
+      console.error('Error:', err);
     }
   };
 
-  const handleSendWhatsApp = async (assignment) => {
-    try {
-      await api.post('/notifications/whatsapp', {
-        volunteer_id: assignment.volunteer_id,
-        message: `Olá! Você está escalado para ${assignment.shift_name} no dia ${assignment.date}. Confirme sua presença.`
-      });
-      alert('Mensagem enviada via WhatsApp!');
-    } catch (err) {
-      console.error('Error sending WhatsApp:', err);
-      alert('Erro ao enviar mensagem');
-    }
-  };
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: theme.textSecondary }}>Carregando...</div>;
 
-  const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-
-  if (loading) return <Loader />;
+  const groupedByDate = assignments.reduce((acc, a) => {
+    const date = a.event_date;
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(a);
+    return acc;
+  }, {});
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 className="page-title">Confirmar Escala</h1>
+        <h1 className="page-title">📋 Escala Publicada</h1>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        {['pending', 'confirmed', 'all'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: filter === f ? 'none' : '1px solid #E2E8F0',
-              backgroundColor: filter === f ? theme.primary : 'white',
-              color: filter === f ? 'white' : theme.text,
-              cursor: 'pointer',
-              fontWeight: filter === f ? '600' : '400'
-            }}
-          >
-            {f === 'pending' ? 'Pendentes' : f === 'confirmed' ? 'Confirmadas' : 'Todas'}
-          </button>
-        ))}
-      </div>
-
-      {assignments.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">✅</div>
-          <div className="empty-state-title">Nenhuma atribuição encontrada</div>
-        </div>
+      {scheduleGroups.length === 0 ? (
+        <Card><div style={{ textAlign: 'center', padding: '40px', color: theme.textSecondary }}>Nenhuma escala publicada ainda. Gere e confirme uma escala primeiro.</div></Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {assignments.map((assign) => (
-            <Card key={assign.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: '600', fontSize: '16px', color: theme.text }}>
-                    {assign.volunteer_name}
-                  </div>
-                  <div style={{ fontSize: '14px', color: theme.textSecondary }}>
-                    {assign.shift_name} • {assign.date}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span className={`badge ${assign.status === 'confirmed' ? 'badge-success' : assign.status === 'rejected' ? 'badge-error' : 'badge-warning'}`}>
-                    {assign.status === 'confirmed' ? 'Confirmado' : assign.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
-                  </span>
-                  <Button size="small" variant="ghost" onClick={() => setSelectedAssignment(assign)}>
-                    Ações
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Modal isOpen={!!selectedAssignment} onClose={() => setSelectedAssignment(null)} title="Ações">
-        {selectedAssignment && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <p><strong>Voluntário:</strong> {selectedAssignment.volunteer_name}</p>
-            <p><strong>Turno:</strong> {selectedAssignment.shift_name}</p>
-            <p><strong>Data:</strong> {selectedAssignment.date}</p>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
-              <Button size="small" onClick={() => handleStatusChange(selectedAssignment.id, 'confirmed')}>
-                ✅ Confirmar
-              </Button>
-              <Button size="small" variant="danger" onClick={() => handleStatusChange(selectedAssignment.id, 'rejected')}>
-                ❌ Rejeitar
-              </Button>
-              <Button size="small" variant="secondary" onClick={() => handleSendWhatsApp(selectedAssignment)}>
-                📱 Enviar WhatsApp
-              </Button>
+        <>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <label style={{ fontSize: '14px', fontWeight: '600', color: theme.text, display: 'block', marginBottom: '4px' }}>Escala</label>
+              <select className="form-input" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+                {scheduleGroups.map(g => <option key={g.id} value={g.id}>{g.name} — {g.ministry_name}{g.area_name ? ` / ${g.area_name}` : ''}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              {['all', 'pending', 'confirmed'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} style={{
+                  padding: '10px 20px', borderRadius: '8px',
+                  border: filter === f ? 'none' : `2px solid ${theme.border}`,
+                  backgroundColor: filter === f ? theme.primary : 'white',
+                  color: filter === f ? 'white' : theme.text, cursor: 'pointer', fontWeight: filter === f ? '600' : '400'
+                }}>
+                  {f === 'all' ? 'Todos' : f === 'pending' ? 'Pendentes' : 'Confirmados'}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </Modal>
+
+          {Object.keys(groupedByDate).length === 0 ? (
+            <Card><div style={{ textAlign: 'center', padding: '40px', color: theme.textSecondary }}>Nenhuma atribuição encontrada</div></Card>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {Object.entries(groupedByDate).sort().map(([date, items]) => (
+                <Card key={date}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600', color: theme.primary }}>{date}</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {items.sort((a, b) => (a.event_time || '').localeCompare(b.event_time || '')).map((a) => (
+                      <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#F8FAFC', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '600' }}>{a.user_name || a.volunteer_name}</div>
+                          <div style={{ fontSize: '14px', color: theme.textSecondary }}>{a.event_title} • {a.event_time?.slice(0, 5)}</div>
+                          {a.role_name && <div style={{ fontSize: '13px', color: theme.primary, marginTop: '2px' }}>{a.role_name}</div>}
+                        </div>
+                        <span className={`badge ${a.status === 'confirmed' ? 'badge-success' : a.status === 'cancelled' ? 'badge-error' : 'badge-warning'}`}>
+                          {a.status === 'confirmed' ? 'Confirmado' : a.status === 'cancelled' ? 'Rejeitado' : 'Pendente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-export default ConfirmSchedule;
+export default PublishedSchedules;

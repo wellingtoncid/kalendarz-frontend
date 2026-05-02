@@ -2,17 +2,16 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
-import Loader from '../components/Loader';
 import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
 
 function Availability() {
   const { theme } = useTheme();
-  const [volunteers, setVolunteers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [selectedVolunteer, setSelectedVolunteer] = useState('');
+  const [selectedUser, setSelectedUser] = useState('');
   const [selectedDays, setSelectedDays] = useState([]);
 
   useEffect(() => {
@@ -21,14 +20,16 @@ function Availability() {
 
   const fetchData = async () => {
     try {
-      const [volRes, availRes] = await Promise.all([
-        api.get('/volunteers'),
+      const [userRes, availRes] = await Promise.all([
+        api.get('/users'),
         api.get('/availabilities')
       ]);
-      setVolunteers(volRes.data || []);
-      setAvailabilities(availRes.data || []);
+      setUsers(Array.isArray(userRes.data) ? userRes.data : []);
+      setAvailabilities(Array.isArray(availRes.data) ? availRes.data : []);
     } catch (err) {
       console.error('Error fetching data:', err);
+      setUsers([]);
+      setAvailabilities([]);
     } finally {
       setLoading(false);
     }
@@ -41,17 +42,17 @@ function Availability() {
   };
 
   const handleSave = async () => {
-    if (!selectedVolunteer || selectedDays.length === 0) {
-      alert('Selecione um voluntário e pelo menos um dia');
+    if (!selectedUser || selectedDays.length === 0) {
+      alert('Selecione um usuário e pelo menos um dia');
       return;
     }
     try {
       await api.post('/availabilities', {
-        volunteer_id: selectedVolunteer,
+        user_id: selectedUser,
         days: selectedDays
       });
       setShowModal(false);
-      setSelectedVolunteer('');
+      setSelectedUser('');
       setSelectedDays([]);
       fetchData();
     } catch (err) {
@@ -71,12 +72,12 @@ function Availability() {
 
   const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-  const getVolunteerName = (id) => {
-    const vol = volunteers.find(v => v.id === id);
-    return vol ? vol.name : `Voluntário #${id}`;
+  const getUserName = (id) => {
+    const user = users.find(u => u.id === id);
+    return user ? user.name : `Usuário #${id}`;
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: theme.textSecondary }}>Carregando...</div>;
 
   return (
     <div>
@@ -86,20 +87,21 @@ function Availability() {
       </div>
 
       {availabilities.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">📅</div>
-          <div className="empty-state-title">Nenhuma disponibilidade cadastrada</div>
-          <div className="empty-state-text">Adicione a disponibilidade dos voluntários</div>
-        </div>
+        <Card>
+          <div style={{ textAlign: 'center', padding: '40px', color: theme.textSecondary }}>
+            <p style={{ fontSize: '18px', marginBottom: '16px' }}>Nenhuma disponibilidade cadastrada</p>
+            <Button onClick={() => setShowModal(true)} icon="➕">Adicionar Disponibilidade</Button>
+          </div>
+        </Card>
       ) : (
         <div className="cards-grid">
           {availabilities.map((avail) => (
             <Card key={avail.id}>
               <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: '600', color: theme.text }}>
-                {getVolunteerName(avail.volunteer_id)}
+                {getUserName(avail.user_id || avail.volunteer_id)}
               </h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {avail.days?.map((day, idx) => (
+                {(avail.days || []).map((day, idx) => (
                   <span key={idx} className="badge badge-info">{days[day]}</span>
                 ))}
               </div>
@@ -116,15 +118,15 @@ function Availability() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nova Disponibilidade">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label className="form-label">Voluntário</label>
+            <label className="form-label">Usuário</label>
             <select
               className="form-input"
-              value={selectedVolunteer}
-              onChange={(e) => setSelectedVolunteer(e.target.value)}
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
             >
               <option value="">Selecione...</option>
-              {volunteers.map(vol => (
-                <option key={vol.id} value={vol.id}>{vol.name}</option>
+              {users.map(user => (
+                <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </select>
           </div>
